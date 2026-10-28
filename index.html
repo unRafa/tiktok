@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descargar TikTok</title>
+<meta name="description" content="Pega el link de un TikTok y descárgalo con o sin marca de agua.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f6fb; --surface:#ffffff; --ink:#1a2033; --muted:#5d667d; --line:#dfe4ef;
+  --accent:#fe2c55; --accent-ink:#ffffff; --teal:#19d3cc; --err:#b3261e;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12151f; --surface:#1b2030; --ink:#f1f3fa; --muted:#a2abc2; --line:#2c3347; --err:#ff8a80;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:var(--bg); color:var(--ink); line-height:1.5;
+  min-height:100vh; display:flex; flex-direction:column; align-items:center;
+  padding:12vh 20px 40px;
+}
+main{width:100%; max-width:560px}
+h1{font-size:clamp(2rem,6vw,2.75rem); font-weight:800; letter-spacing:-.02em; line-height:1.1; margin:0 0 10px}
+h1 span{background:linear-gradient(transparent 62%, var(--teal) 62%, var(--teal) 92%, transparent 92%)}
+.lead{color:var(--muted); margin:0 0 28px; font-size:1.05rem}
+form{display:flex; gap:8px; background:var(--surface); border:1.5px solid var(--line); border-radius:16px; padding:6px}
+form:focus-within{border-color:var(--accent)}
+input{flex:1; min-width:0; border:0; background:transparent; color:var(--ink); font:inherit; padding:12px 14px; outline:none}
+input::placeholder{color:var(--muted)}
+button,.btn{
+  font:inherit; font-weight:800; border:0; border-radius:12px; padding:12px 20px; cursor:pointer;
+  background:var(--accent); color:var(--accent-ink); text-decoration:none; text-align:center; display:inline-block;
+}
+button:hover,.btn:hover{filter:brightness(1.06)}
+button:disabled{opacity:.6; cursor:progress}
+:focus-visible{outline:3px solid var(--teal); outline-offset:2px}
+.btn.alt{background:transparent; color:var(--ink); box-shadow:inset 0 0 0 1.5px var(--line)}
+.btn[aria-disabled="true"]{opacity:.45; pointer-events:none}
+#msg{margin:14px 4px 0; min-height:1.5em; font-size:.95rem; color:var(--muted)}
+#msg.error{color:var(--err)}
+.result{
+  margin-top:22px; background:var(--surface); border:1.5px solid var(--line); border-radius:20px;
+  padding:16px; display:grid; grid-template-columns:120px 1fr; gap:16px; align-items:start;
+}
+.result[hidden]{display:none}
+.thumb{width:120px; aspect-ratio:9/16; object-fit:cover; border-radius:12px; background:var(--line)}
+.author{color:var(--muted); font-size:.9rem; margin:0 0 2px; font-weight:600}
+.title{margin:0 0 16px; font-weight:800; font-size:1.05rem; line-height:1.35; overflow-wrap:anywhere;
+  display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden}
+.actions{display:flex; flex-direction:column; gap:8px}
+.note{margin-top:10px; color:var(--muted); font-size:.85rem}
+footer{margin-top:48px; color:var(--muted); font-size:.8rem; max-width:560px; text-align:center}
+@media (max-width:480px){
+  .result{grid-template-columns:90px 1fr; padding:12px}
+  .thumb{width:90px}
+  form{flex-direction:column}
+}
+@media (prefers-reduced-motion:no-preference){
+  .result{animation:in .25s ease-out}
+  @keyframes in{from{opacity:0; transform:translateY(6px)}to{opacity:1; transform:none}}
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>Descarga tu <span>TikTok</span></h1>
+  <p class="lead">Pega el link del video y elige cómo guardarlo.</p>
+
+  <form id="form" autocomplete="off">
+    <input id="url" type="url" inputmode="url" placeholder="https://www.tiktok.com/@usuario/video/..." aria-label="Link del TikTok" required>
+    <button id="go" type="submit">Buscar</button>
+  </form>
+  <p id="msg" role="status" aria-live="polite"></p>
+
+  <section id="result" class="result" hidden aria-label="Video encontrado">
+    <img id="thumb" class="thumb" alt="Miniatura del video">
+    <div>
+      <p id="author" class="author"></p>
+      <p id="title" class="title"></p>
+      <div class="actions">
+        <a id="nowm" class="btn" href="#" target="_blank" rel="noopener" download>Descargar sin marca de agua</a>
+        <a id="wm" class="btn alt" href="#" target="_blank" rel="noopener" download>Descargar con marca de agua</a>
+      </div>
+      <p id="note" class="note" hidden></p>
+    </div>
+  </section>
+</main>
+
+<footer>Usa esta herramienta solo con videos tuyos o con permiso de su creador. No está afiliada a TikTok.</footer>
+
+<script>
+/*
+  CONFIGURACIÓN
+  Pon aquí la URL de tu backend (Cloudflare Worker, Vercel, etc.).
+  Se llamará así:  GET {API_URL}?url=<link-del-tiktok>
+  Y debe responder JSON con este formato:
+  {
+    "title": "Texto del video",
+    "author": "@usuario",
+    "thumbnail": "https://...jpg",
+    "no_watermark": "https://...mp4",
+    "watermark": "https://...mp4"
+  }
+  Si lo dejas vacío, la página muestra solo la vista previa (título y miniatura)
+  usando el oEmbed público de TikTok, con los botones de descarga desactivados.
+*/
+const API_URL = "tiktok.unrafa26.workers.dev";
+
+const $ = id => document.getElementById(id);
+const form = $("form"), input = $("url"), go = $("go"), msg = $("msg"), result = $("result");
+
+const isTikTok = v => {
+  try {
+    const h = new URL(v).hostname.replace(/^www\./, "");
+    return h === "tiktok.com" || h.endsWith(".tiktok.com");
+  } catch { return false; }
+};
+
+const say = (t, err = false) => { msg.textContent = t; msg.className = err ? "error" : ""; };
+
+const setLink = (el, href) => {
+  if (href) { el.href = href; el.removeAttribute("aria-disabled"); }
+  else { el.href = "#"; el.setAttribute("aria-disabled", "true"); }
+};
+
+const show = d => {
+  $("thumb").src = d.thumbnail || "";
+  $("author").textContent = d.author || "";
+  $("title").textContent = d.title || "Sin título";
+  setLink($("nowm"), d.no_watermark);
+  setLink($("wm"), d.watermark);
+  const note = $("note");
+  note.hidden = !!(d.no_watermark || d.watermark);
+  note.textContent = "Falta conectar el backend para activar las descargas.";
+  result.hidden = false;
+};
+
+async function lookup(link) {
+  if (API_URL) {
+    const r = await fetch(API_URL + "?url=" + encodeURIComponent(link));
+    if (!r.ok) throw new Error("api");
+    return r.json();
+  }
+  const r = await fetch("https://www.tiktok.com/oembed?url=" + encodeURIComponent(link));
+  if (!r.ok) throw new Error("oembed");
+  const o = await r.json();
+  return { title: o.title, author: o.author_name || "", thumbnail: o.thumbnail_url };
+}
+
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  const link = input.value.trim();
+  result.hidden = true;
+  if (!isTikTok(link)) { say("Pega un link válido de TikTok (tiktok.com o vm.tiktok.com).", true); return; }
+  go.disabled = true; go.textContent = "Buscando…"; say("Buscando el video…");
+  try {
+    show(await lookup(link));
+    say("");
+  } catch {
+    say("No se pudo cargar el video. Revisa que el link sea público y vuelve a intentarlo.", true);
+  } finally {
+    go.disabled = false; go.textContent = "Buscar";
+  }
+});
+</script>
+</body>
+</html>
